@@ -9,6 +9,7 @@ import {Hooks} from "v4-core/libraries/Hooks.sol";
 import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {IHooks} from "v4-core/interfaces/IHooks.sol";
 import {Currency, CurrencyLibrary} from "v4-core/types/Currency.sol";
+import {TransientStateLibrary} from "v4-core/libraries/TransientStateLibrary.sol";
 
 contract FairLauncherTest is Test, Deployers {
     FairLaunchHook fairLaunchHook;
@@ -17,19 +18,26 @@ contract FairLauncherTest is Test, Deployers {
     uint160 private constant SQRTPRICEX96_LOWER = 362910073449872328385539408603818;
     uint160 private constant SQRTPRICEX96_UPPER = 364000383803451422962285634103846;
     uint160 private constant SQRTPRICEX96_UPPER_NEXT = 365093969835370942477283908147566;
+    uint160 private constant SQRTPRICEX96_MIN = 4306310044;
+    uint160 private constant SQRTPRICEX96_MAX = 1457652066949847389969617340386294118487833376468;
     int24 private constant END_TICK = 108540;
     int24 private constant START_TICK_LOWER = 168600;
     int24 private constant START_TICK_UPPER = 168660;
     int24 private constant START_TICK_UPPER_NEXT = 168720;
+    int24 private constant MIN_TICK = -887220;
+    int24 private constant MAX_TICK = 887220;
 
     function setUp() public {
         deployFreshManagerAndRouters();
-        address hookAddress = address(uint160(Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.BEFORE_SWAP_FLAG));
+        address hookAddress =
+            address(uint160(Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG));
         deployCodeTo("FairLaunchHook.sol", abi.encode(manager), hookAddress);
         fairLaunchHook = FairLaunchHook(hookAddress);
     }
 
     function testStartTick() public pure {
+        assertEq(TickMath.getTickAtSqrtPrice(SQRTPRICEX96_MIN), MIN_TICK);
+        assertEq(TickMath.getTickAtSqrtPrice(SQRTPRICEX96_MAX), MAX_TICK);
         assertEq(TickMath.getTickAtSqrtPrice(SQRTPRICEX96_END), END_TICK);
         assertEq(TickMath.getTickAtSqrtPrice(SQRTPRICEX96_LOWER), START_TICK_LOWER);
         assertEq(TickMath.getTickAtSqrtPrice(SQRTPRICEX96_UPPER), START_TICK_UPPER);
@@ -58,6 +66,22 @@ contract FairLauncherTest is Test, Deployers {
 
         vm.warp(block.timestamp + 1 hours + 1);
         swap(key, true, -1 ether, "");
+    }
+
+    function testSuccessfullRaiseInConstantPrice() public {
+        fairLaunchHook.createFairLaunch("FUN", "FUN");
+        address token = _addressFrom(address(fairLaunchHook), 0);
+
+        deal(address(this), 1000 ether);
+
+        PoolKey memory key = PoolKey({
+            currency0: CurrencyLibrary.NATIVE,
+            currency1: Currency.wrap(address(token)),
+            fee: 10000,
+            tickSpacing: 60,
+            hooks: IHooks(address(fairLaunchHook))
+        });
+        swap(key, true, -1000 ether, "");
     }
 
     function _addressFrom(address _origin, uint256 _nonce) public pure returns (address) {
