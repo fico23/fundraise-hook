@@ -22,6 +22,7 @@ import {TransientStateLibrary} from "v4-core/libraries/TransientStateLibrary.sol
 import {FixedPoint96} from "v4-core/libraries/FixedPoint96.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {FullMath} from "v4-core/libraries/FullMath.sol";
+import {Position} from "v4-core/libraries/Position.sol";
 
 contract FairLaunchHook is BaseHook {
     using CurrencySettler for Currency;
@@ -242,11 +243,37 @@ contract FairLaunchHook is BaseHook {
                 (BalanceDelta balanceDelta,) = poolManager.modifyLiquidity(key, params, "");
                 _addNewPool(key, balanceDelta);
             }
+        } else if (sqrtPriceX96 <= SQRTPRICEX96_END) {
+            // success
+            fairLaunchInfo.status = 3;
+
+            BalanceDelta balanceDelta = _removeExistingLiquidity(key, START_TICK_UPPER, START_TICK_UPPER_NEXT);
+            balanceDelta = balanceDelta + _removeExistingLiquidity(key, END_TICK, START_TICK_LOWER);
+
+            _addNewPool(key, balanceDelta);
         }
 
-        if (sqrtPriceX96 == SQRTPRICEX96_END) {}
-
         return (this.afterSwap.selector, 0);
+    }
+
+    function _removeExistingLiquidity(PoolKey calldata key, int24 tickLower, int24 tickUpper)
+        internal
+        returns (BalanceDelta balanceDelta)
+    {
+        Position.Info memory position = StateLibrary.getPosition(
+            poolManager, PoolIdLibrary.toId(key), address(this), tickLower, tickUpper, bytes32(0)
+        );
+
+        if (position.liquidity > 0) {
+            IPoolManager.ModifyLiquidityParams memory params = IPoolManager.ModifyLiquidityParams({
+                tickLower: tickLower,
+                tickUpper: tickUpper,
+                liquidityDelta: -SafeCast.toInt256(position.liquidity),
+                salt: bytes32(0)
+            });
+
+            (balanceDelta,) = poolManager.modifyLiquidity(key, params, "");
+        }
     }
 
     function _addNewPool(PoolKey calldata key, BalanceDelta balanceDelta) internal {
