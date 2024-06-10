@@ -12,10 +12,15 @@ import {Currency, CurrencyLibrary} from "v4-core/types/Currency.sol";
 
 contract FairLauncherTest is Test, Deployers {
     FairLaunchHook fairLaunchHook;
+
+    uint160 private constant SQRTPRICEX96_END = 18016810018735514800466276983207;
     uint160 private constant SQRTPRICEX96_LOWER = 362910073449872328385539408603818;
     uint160 private constant SQRTPRICEX96_UPPER = 364000383803451422962285634103846;
+    uint160 private constant SQRTPRICEX96_UPPER_NEXT = 365093969835370942477283908147566;
+    int24 private constant END_TICK = 108540;
     int24 private constant START_TICK_LOWER = 168600;
     int24 private constant START_TICK_UPPER = 168660;
+    int24 private constant START_TICK_UPPER_NEXT = 168720;
 
     function setUp() public {
         deployFreshManagerAndRouters();
@@ -25,8 +30,10 @@ contract FairLauncherTest is Test, Deployers {
     }
 
     function testStartTick() public pure {
+        assertEq(TickMath.getTickAtSqrtPrice(SQRTPRICEX96_END), END_TICK);
         assertEq(TickMath.getTickAtSqrtPrice(SQRTPRICEX96_LOWER), START_TICK_LOWER);
         assertEq(TickMath.getTickAtSqrtPrice(SQRTPRICEX96_UPPER), START_TICK_UPPER);
+        assertEq(TickMath.getTickAtSqrtPrice(SQRTPRICEX96_UPPER_NEXT), START_TICK_UPPER_NEXT);
     }
 
     function testCreateFairLaunch() public {

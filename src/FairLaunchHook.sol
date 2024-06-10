@@ -25,11 +25,14 @@ contract FairLaunchHook is BaseHook {
     error CantAddLiquidity();
     error FairLaunchFailed();
 
+    uint160 private constant SQRTPRICEX96_END = 18016810018735514800466276983207;
     uint160 private constant SQRTPRICEX96_LOWER = 362910073449872328385539408603818;
     uint160 private constant SQRTPRICEX96_UPPER = 364000383803451422962285634103846;
-    int24 private constant START_TICK_LOWER_NEXT = 168540;
+    uint160 private constant SQRTPRICEX96_UPPER_NEXT = 365093969835370942477283908147566;
+    int24 private constant END_TICK = 108540;
     int24 private constant START_TICK_LOWER = 168600;
     int24 private constant START_TICK_UPPER = 168660;
+    int24 private constant START_TICK_UPPER_NEXT = 168720;
     uint256 private constant TOTAL_SUPPLY = 420_000_000e18;
     uint256 private constant INITIAL_LIQUIDITY_AMOUNT = 15259796509662827620281713;
     uint256 private constant INITIAL_TOKEN_AMOUNT = 209999999999999999999999991;
@@ -110,7 +113,7 @@ contract FairLaunchHook is BaseHook {
             salt: bytes32(0)
         });
 
-        (BalanceDelta callerDelta,) = poolManager.modifyLiquidity(key, params, "");
+        poolManager.modifyLiquidity(key, params, "");
 
         CurrencySettler.settle(currency, poolManager, address(this), INITIAL_TOKEN_AMOUNT, false);
 
@@ -159,26 +162,54 @@ contract FairLaunchHook is BaseHook {
                 liquidityDelta: -SafeCast.toInt256(INITIAL_LIQUIDITY_AMOUNT),
                 salt: bytes32(0)
             });
-            (BalanceDelta callerDelta,) = poolManager.modifyLiquidity(key, modifyLiqParams, "");
-            console.log("here I am");
-            console.logInt(BalanceDeltaLibrary.amount0(callerDelta));
+            (BalanceDelta balanceDelta,) = poolManager.modifyLiquidity(key, modifyLiqParams, "");
+            console.log("constant price ended, liquidity amounts removed");
+            console.logInt(BalanceDeltaLibrary.amount0(balanceDelta));
+            console.logInt(BalanceDeltaLibrary.amount1(balanceDelta));
             // {
             //     (uint160 sqrtPriceX96, int24 tick,,) = StateLibrary.getSlot0(poolManager, PoolIdLibrary.toId(key));
             //     console.log("current price", sqrtPriceX96);
             //     console.logInt(tick);
             // }
-            int128 ethAmount = BalanceDeltaLibrary.amount0(callerDelta);
+            int128 ethAmount = BalanceDeltaLibrary.amount0(balanceDelta);
             if (ethAmount > 0) {
                 modifyLiqParams = IPoolManager.ModifyLiquidityParams({
-                    tickLower: START_TICK_LOWER_NEXT,
-                    tickUpper: START_TICK_LOWER,
+                    tickLower: START_TICK_UPPER,
+                    tickUpper: START_TICK_UPPER_NEXT,
                     liquidityDelta: SafeCast.toInt256(
-                        LiquidityAmounts.getLiquidityForAmount0(sqrtRatioAX96, sqrtRatioBX96, SafeCast.toUint128(amount0));
+                        LiquidityAmounts.getLiquidityForAmount0(
+                            SQRTPRICEX96_UPPER, SQRTPRICEX96_UPPER_NEXT, uint256(int256(ethAmount))
+                        )
                     ),
                     salt: bytes32(0)
                 });
+                (BalanceDelta balanceDeltaEth,) = poolManager.modifyLiquidity(key, modifyLiqParams, "");
+                balanceDelta = balanceDelta + balanceDeltaEth;
             }
-            console.logInt(BalanceDeltaLibrary.amount1(callerDelta));
+
+            modifyLiqParams = IPoolManager.ModifyLiquidityParams({
+                tickLower: END_TICK,
+                tickUpper: START_TICK_LOWER,
+                liquidityDelta: SafeCast.toInt256(
+                    LiquidityAmounts.getLiquidityForAmount1(
+                        SQRTPRICEX96_END, SQRTPRICEX96_LOWER, uint256(int256(BalanceDeltaLibrary.amount1(balanceDelta)))
+                    )
+                ),
+                salt: bytes32(0)
+            });
+            (BalanceDelta balanceDeltaToken,) = poolManager.modifyLiquidity(key, modifyLiqParams, "");
+            balanceDelta = balanceDelta + balanceDeltaToken;
+
+            if (BalanceDeltaLibrary.amount0(balanceDelta) > 0) {
+                poolManager.take(
+                    CurrencyLibrary.NATIVE, address(this), uint256(int256(BalanceDeltaLibrary.amount0(balanceDelta)))
+                );
+            }
+            if (BalanceDeltaLibrary.amount1(balanceDelta) > 0) {
+                poolManager.take(
+                    key.currency1, address(this), uint256(int256(BalanceDeltaLibrary.amount1(balanceDelta)))
+                );
+            }
 
             return (this.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
         }
