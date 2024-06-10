@@ -34,6 +34,14 @@ contract FairLaunchHook is BaseHook {
 
     uint8 public fairLaunchStatus; // 0 - none, 1 - started, 2 - ended, 3 - failed
 
+    struct FairLaunchInfo {
+        uint8 status;
+        uint40 constantEnd;
+        uint40 fairLaunchEnd;
+    }
+
+    mapping(address => FairLaunchInfo) public fairLaunchesInfo;
+
     constructor(IPoolManager poolManager) BaseHook(poolManager) {
         fairLaunchStatus = 1;
     }
@@ -57,10 +65,6 @@ contract FairLaunchHook is BaseHook {
         });
     }
 
-    struct LiquidityData {
-        address token;
-    }
-
     function createFairLaunch(string memory name, string memory symbol) external {
         Token token = new Token(name, symbol, 18, TOTAL_SUPPLY);
 
@@ -74,6 +78,12 @@ contract FairLaunchHook is BaseHook {
         poolManager.initialize(key, SQRTPRICEX96_UPPER, "");
 
         poolManager.unlock(abi.encode(address(token)));
+
+        fairLaunchesInfo[address(token)] = FairLaunchInfo({
+            status: 1,
+            constantEnd: uint40(block.timestamp + CONSTANT_PRICE_DURATION),
+            fairLaunchEnd: uint40(block.timestamp + FAIR_LAUNCH_DURATION)
+        });
     }
 
     function unlockCallback(bytes calldata data) external override poolManagerOnly returns (bytes memory) {
@@ -95,53 +105,58 @@ contract FairLaunchHook is BaseHook {
             liquidityDelta: SafeCast.toInt256(INITIAL_LIQUIDITY_AMOUNT),
             salt: bytes32(0)
         });
-        console.log("before", poolManager.getGit());
-        console.logInt(poolManager.getDelta(currency, address(this)));
-        (BalanceDelta callerDelta, ) = poolManager.modifyLiquidity(key, params, "");
-        console.logInt(BalanceDeltaLibrary.amount0(callerDelta));
-        console.logInt(BalanceDeltaLibrary.amount1(callerDelta));
 
-        console.log("after", poolManager.getGit());
-        console.logInt(poolManager.getDelta(currency, address(this)));
+        (BalanceDelta callerDelta,) = poolManager.modifyLiquidity(key, params, "");
+
         CurrencySettler.settle(currency, poolManager, address(this), INITIAL_TOKEN_AMOUNT, false);
-        console.log("after settle", poolManager.getGit());
-        console.logInt(poolManager.getDelta(currency, address(this)));
-        // poolManager.sync(currency);
-        // Token(token).transfer(address(poolManager), INITIAL_LIQUIDITY_AMOUNT);
-        // poolManager.settle(currency);
 
         return "";
     }
 
-    function beforeAddLiquidity(address, PoolKey calldata, IPoolManager.ModifyLiquidityParams calldata, bytes calldata)
-        external
-        view
-        override
-        returns (bytes4)
-    {
-        if (fairLaunchStatus != 2) revert CantAddLiquidity();
+    function beforeAddLiquidity(
+        address,
+        PoolKey calldata pool,
+        IPoolManager.ModifyLiquidityParams calldata,
+        bytes calldata
+    ) external view override returns (bytes4) {
+        if (fairLaunchesInfo[Currency.unwrap(pool.currency1)].status != 2) revert CantAddLiquidity();
 
         return this.beforeAddLiquidity.selector;
     }
 
-    function beforeSwap(address, PoolKey calldata key, IPoolManager.SwapParams calldata params, bytes calldata)
+    function beforeSwap(address, PoolKey calldata key, IPoolManager.SwapParams calldata, bytes calldata)
         external
         override
         poolManagerOnly
         returns (bytes4, BeforeSwapDelta, uint24)
     {
-        // uint256 status = fairLaunchStatus;
+        FairLaunchInfo storage fairLaunchInfo = fairLaunchesInfo[Currency.unwrap(key.currency1)];
+        uint256 status = fairLaunchInfo.status;
 
-        // // behave like normal pool after fair launch
-        // if (status == 2) return (this.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
+        // behave like normal pool after fair launch
+        if (status == 2) return (this.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
 
-        // // revert when fair launch has failed to launch fairly :)
-        // if (status == 3) revert FairLaunchFailed();
+        // revert when fair launch has failed -> sell all tokens for the same price using NoOp hook
+        // TODO: currently it behaves like a normal pool and users must compete to achieve best price
+        if (status == 3) return (this.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
 
-        // if (block.timestamp < constantPriceEnd) {
-        //     // swap without fees keeping the sqrt price same
-        // }
+        if (block.timestamp > fairLaunchInfo.fairLaunchEnd) {
+            // TODO: at this point all trading must be frozen and NoOp hook that ensures all
+            // users get same execution price must be enforced
+            fairLaunchInfo.status = 3;
+            return (this.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
+        }
 
-        // if (block.timestamp < fairLaunchEnd) {}
+        if (block.timestamp > fairLaunchInfo.constantEnd) {
+            // remove liquidity
+            IPoolManager.ModifyLiquidityParams memory modifyLiqParams = IPoolManager.ModifyLiquidityParams({
+                tickLower: START_TICK_LOWER,
+                tickUpper: START_TICK_UPPER,
+                liquidityDelta: -SafeCast.toInt256(INITIAL_LIQUIDITY_AMOUNT),
+                salt: bytes32(0)
+            });
+            (BalanceDelta callerDelta,) = poolManager.modifyLiquidity(key, modifyLiqParams, "");
+            return (this.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
+        }
     }
 }
