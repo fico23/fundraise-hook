@@ -8,6 +8,7 @@ import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {BeforeSwapDelta, toBeforeSwapDelta, BeforeSwapDeltaLibrary} from "v4-core/types/BeforeSwapDelta.sol";
 import {Token} from "./Token.sol";
 import {PoolKey} from "v4-core/types/PoolKey.sol";
+import {PoolIdLibrary} from "v4-core/types/PoolId.sol";
 import {Currency, CurrencyLibrary} from "v4-core/types/Currency.sol";
 import {IHooks} from "v4-core/interfaces/IHooks.sol";
 import {CurrencySettler} from "v4-core-test/utils/CurrencySettler.sol";
@@ -15,6 +16,8 @@ import {LiquidityAmounts} from "v4-periphery/libraries/LiquidityAmounts.sol";
 import {SafeCast} from "v4-core/libraries/SafeCast.sol";
 import {console} from "forge-std/Test.sol";
 import {BalanceDelta, BalanceDeltaLibrary} from "v4-core/types/BalanceDelta.sol";
+import {console} from "forge-std/Test.sol";
+import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
 
 contract FairLaunchHook is BaseHook {
     using CurrencySettler for Currency;
@@ -24,6 +27,7 @@ contract FairLaunchHook is BaseHook {
 
     uint160 private constant SQRTPRICEX96_LOWER = 362910073449872328385539408603818;
     uint160 private constant SQRTPRICEX96_UPPER = 364000383803451422962285634103846;
+    int24 private constant START_TICK_LOWER_NEXT = 168540;
     int24 private constant START_TICK_LOWER = 168600;
     int24 private constant START_TICK_UPPER = 168660;
     uint256 private constant TOTAL_SUPPLY = 420_000_000e18;
@@ -156,7 +160,29 @@ contract FairLaunchHook is BaseHook {
                 salt: bytes32(0)
             });
             (BalanceDelta callerDelta,) = poolManager.modifyLiquidity(key, modifyLiqParams, "");
+            console.log("here I am");
+            console.logInt(BalanceDeltaLibrary.amount0(callerDelta));
+            // {
+            //     (uint160 sqrtPriceX96, int24 tick,,) = StateLibrary.getSlot0(poolManager, PoolIdLibrary.toId(key));
+            //     console.log("current price", sqrtPriceX96);
+            //     console.logInt(tick);
+            // }
+            int128 ethAmount = BalanceDeltaLibrary.amount0(callerDelta);
+            if (ethAmount > 0) {
+                modifyLiqParams = IPoolManager.ModifyLiquidityParams({
+                    tickLower: START_TICK_LOWER_NEXT,
+                    tickUpper: START_TICK_LOWER,
+                    liquidityDelta: SafeCast.toInt256(
+                        LiquidityAmounts.getLiquidityForAmount0(sqrtRatioAX96, sqrtRatioBX96, SafeCast.toUint128(amount0));
+                    ),
+                    salt: bytes32(0)
+                });
+            }
+            console.logInt(BalanceDeltaLibrary.amount1(callerDelta));
+
             return (this.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
         }
+
+        return (this.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
     }
 }

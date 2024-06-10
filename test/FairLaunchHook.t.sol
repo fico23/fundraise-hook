@@ -38,16 +38,19 @@ contract FairLauncherTest is Test, Deployers {
         fairLaunchHook.createFairLaunch("FUN", "FUN");
         address token = _addressFrom(address(fairLaunchHook), 0);
 
-        deal(address(this), 10 ether);
+        deal(address(this), 1000 ether);
 
         PoolKey memory key = PoolKey({
             currency0: CurrencyLibrary.NATIVE,
             currency1: Currency.wrap(address(token)),
             fee: 10000,
             tickSpacing: 60,
-            hooks: IHooks(address(this))
+            hooks: IHooks(address(fairLaunchHook))
         });
-        swap(key, true, -0.1 ether, "");
+        swap(key, true, -1 ether, "");
+
+        vm.warp(block.timestamp + 1 hours + 1);
+        swap(key, true, -1 ether, "");
     }
 
     function _addressFrom(address _origin, uint256 _nonce) public pure returns (address) {
