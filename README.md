@@ -1,66 +1,13 @@
-## Foundry
+## FairLaunchoor
+Worlds fairest fair launch model.
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
-
-Foundry consists of:
-
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
-
-## Documentation
-
-https://book.getfoundry.sh/
-
-## Usage
-
-### Build
-
-```shell
-$ forge build
-```
-
-### Test
-
-```shell
-$ forge test
-```
-
-### Format
-
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+## How it works?
+Users call hook.createFairLaunch which then:
+- deploys new token with given symbol, name and 420M total supply
+- initializes token/ETH pool
+- deploys 50% of total supply to one sided pool and starts the timer
+- for 1 hour price is nearly constant, since all liquidity is in one narrow range
+- after 1 hour, whatever ETH was raised is now put into one narrow one sided range, and remaining tokens are put into one sided wide range
+- after 7 days if tokens are still not sold -> pool is cancelled and users can only sell back their bought tokens
+- if all tokens are bought before 7 days mark -> liquidity is removed and new pool is initialized, where all collected ETH and other half of tokens supply is put into full range liquidity
+- LP tokens are owned by hook, effectively burned

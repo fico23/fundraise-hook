@@ -47,8 +47,6 @@ contract FairLaunchHook is BaseHook {
     uint256 private constant CONSTANT_PRICE_DURATION = 1 hours;
     uint256 private constant FAIR_LAUNCH_DURATION = 7 days;
 
-    uint8 public fairLaunchStatus; // 0 - none, 1 - started, 2 - ended, 3 - failed
-
     struct FairLaunchInfo {
         uint8 status;
         uint40 constantEnd;
@@ -57,9 +55,7 @@ contract FairLaunchHook is BaseHook {
 
     mapping(address => FairLaunchInfo) public fairLaunchesInfo;
 
-    constructor(IPoolManager poolManager) BaseHook(poolManager) {
-        fairLaunchStatus = 1;
-    }
+    constructor(IPoolManager poolManager) BaseHook(poolManager) {}
 
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
         return Hooks.Permissions({
