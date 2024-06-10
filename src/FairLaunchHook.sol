@@ -1,28 +1,30 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.25;
 
-import {BaseHook} from "v4-periphery/BaseHook.sol";
-import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
-import {Hooks} from "v4-core/libraries/Hooks.sol";
-import {PoolKey} from "v4-core/types/PoolKey.sol";
-import {BeforeSwapDelta, toBeforeSwapDelta, BeforeSwapDeltaLibrary} from "v4-core/types/BeforeSwapDelta.sol";
 import {Token} from "./Token.sol";
-import {PoolKey} from "v4-core/types/PoolKey.sol";
-import {PoolIdLibrary} from "v4-core/types/PoolId.sol";
-import {Currency, CurrencyLibrary} from "v4-core/types/Currency.sol";
-import {IHooks} from "v4-core/interfaces/IHooks.sol";
-import {CurrencySettler} from "v4-core-test/utils/CurrencySettler.sol";
-import {LiquidityAmounts} from "v4-periphery/libraries/LiquidityAmounts.sol";
-import {SafeCast} from "v4-core/libraries/SafeCast.sol";
+
 import {console} from "forge-std/Test.sol";
-import {BalanceDelta, BalanceDeltaLibrary} from "v4-core/types/BalanceDelta.sol";
+
+import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
+import {CurrencySettler} from "v4-core-test/utils/CurrencySettler.sol";
+import {IHooks} from "v4-core/interfaces/IHooks.sol";
+import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
+import {FixedPoint96} from "v4-core/libraries/FixedPoint96.sol";
+import {FullMath} from "v4-core/libraries/FullMath.sol";
+import {Hooks} from "v4-core/libraries/Hooks.sol";
+import {Position} from "v4-core/libraries/Position.sol";
+import {SafeCast} from "v4-core/libraries/SafeCast.sol";
 import {StateLibrary} from "v4-core/libraries/StateLibrary.sol";
 import {TickMath} from "v4-core/libraries/TickMath.sol";
 import {TransientStateLibrary} from "v4-core/libraries/TransientStateLibrary.sol";
-import {FixedPoint96} from "v4-core/libraries/FixedPoint96.sol";
-import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
-import {FullMath} from "v4-core/libraries/FullMath.sol";
-import {Position} from "v4-core/libraries/Position.sol";
+import {BalanceDelta, BalanceDeltaLibrary} from "v4-core/types/BalanceDelta.sol";
+import {BeforeSwapDelta, BeforeSwapDeltaLibrary, toBeforeSwapDelta} from "v4-core/types/BeforeSwapDelta.sol";
+import {Currency, CurrencyLibrary} from "v4-core/types/Currency.sol";
+import {PoolIdLibrary} from "v4-core/types/PoolId.sol";
+import {PoolKey} from "v4-core/types/PoolKey.sol";
+import {PoolKey} from "v4-core/types/PoolKey.sol";
+import {BaseHook} from "v4-periphery/BaseHook.sol";
+import {LiquidityAmounts} from "v4-periphery/libraries/LiquidityAmounts.sol";
 
 contract FairLaunchHook is BaseHook {
     using CurrencySettler for Currency;
@@ -131,13 +133,11 @@ contract FairLaunchHook is BaseHook {
 
     function beforeAddLiquidity(
         address,
-        PoolKey calldata pool,
+        PoolKey calldata,
         IPoolManager.ModifyLiquidityParams calldata,
         bytes calldata
-    ) external view override returns (bytes4) {
-        if (fairLaunchesInfo[Currency.unwrap(pool.currency1)].status != 2) revert CantAddLiquidity();
-
-        return this.beforeAddLiquidity.selector;
+    ) external pure override returns (bytes4) {
+        revert CantAddLiquidity();
     }
 
     function beforeSwap(address, PoolKey calldata key, IPoolManager.SwapParams calldata, bytes calldata)

@@ -3,13 +3,15 @@ pragma solidity 0.8.25;
 import {FairLaunchHook} from "../src/FairLaunchHook.sol";
 import {Test, console} from "forge-std/Test.sol";
 import {Deployers} from "v4-core-test/utils/Deployers.sol";
-import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
-import {TickMath} from "v4-core/libraries/TickMath.sol";
-import {Hooks} from "v4-core/libraries/Hooks.sol";
-import {PoolKey} from "v4-core/types/PoolKey.sol";
+
 import {IHooks} from "v4-core/interfaces/IHooks.sol";
-import {Currency, CurrencyLibrary} from "v4-core/types/Currency.sol";
+import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
+import {Hooks} from "v4-core/libraries/Hooks.sol";
+import {TickMath} from "v4-core/libraries/TickMath.sol";
+
 import {TransientStateLibrary} from "v4-core/libraries/TransientStateLibrary.sol";
+import {Currency, CurrencyLibrary} from "v4-core/types/Currency.sol";
+import {PoolKey} from "v4-core/types/PoolKey.sol";
 
 contract FairLauncherTest is Test, Deployers {
     FairLaunchHook fairLaunchHook;
@@ -81,6 +83,25 @@ contract FairLauncherTest is Test, Deployers {
             tickSpacing: 60,
             hooks: IHooks(address(fairLaunchHook))
         });
+        swap(key, true, -1000 ether, "");
+    }
+
+    function testSuccessfullRaiseNotInConstantPrice() public {
+        fairLaunchHook.createFairLaunch("FUN", "FUN");
+        address token = _addressFrom(address(fairLaunchHook), 0);
+
+        deal(address(this), 10000 ether);
+
+        PoolKey memory key = PoolKey({
+            currency0: CurrencyLibrary.NATIVE,
+            currency1: Currency.wrap(address(token)),
+            fee: 10000,
+            tickSpacing: 60,
+            hooks: IHooks(address(fairLaunchHook))
+        });
+        swap(key, true, -1 ether, "");
+
+        vm.warp(block.timestamp + 1 hours + 1);
         swap(key, true, -1000 ether, "");
     }
 
