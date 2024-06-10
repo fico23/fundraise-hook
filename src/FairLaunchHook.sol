@@ -11,6 +11,10 @@ import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {Currency, CurrencyLibrary} from "v4-core/types/Currency.sol";
 import {IHooks} from "v4-core/interfaces/IHooks.sol";
 import {CurrencySettler} from "v4-core-test/utils/CurrencySettler.sol";
+import {LiquidityAmounts} from "v4-periphery/libraries/LiquidityAmounts.sol";
+import {SafeCast} from "v4-core/libraries/SafeCast.sol";
+import {console} from "forge-std/Test.sol";
+import {BalanceDelta, BalanceDeltaLibrary} from "v4-core/types/BalanceDelta.sol";
 
 contract FairLaunchHook is BaseHook {
     using CurrencySettler for Currency;
@@ -18,10 +22,13 @@ contract FairLaunchHook is BaseHook {
     error CantAddLiquidity();
     error FairLaunchFailed();
 
-    uint160 private constant SQRTPRICEX96 = 4582 << 96;
-    int24 private constant START_TICK = 168606;
+    uint160 private constant SQRTPRICEX96_LOWER = 362910073449872328385539408603818;
+    uint160 private constant SQRTPRICEX96_UPPER = 364000383803451422962285634103846;
+    int24 private constant START_TICK_LOWER = 168600;
+    int24 private constant START_TICK_UPPER = 168660;
     uint256 private constant TOTAL_SUPPLY = 420_000_000e18;
-    uint256 private constant INITIAL_LIQUIDITY_AMOUNT = 210_000_000e18;
+    uint256 private constant INITIAL_LIQUIDITY_AMOUNT = 15259796509662827620281713;
+    uint256 private constant INITIAL_TOKEN_AMOUNT = 209999999999999999999999991;
     uint256 private constant CONSTANT_PRICE_DURATION = 1 hours;
     uint256 private constant FAIR_LAUNCH_DURATION = 7 days;
 
@@ -61,10 +68,10 @@ contract FairLaunchHook is BaseHook {
             currency0: CurrencyLibrary.NATIVE,
             currency1: Currency.wrap(address(token)),
             fee: 10000,
-            tickSpacing: 200,
+            tickSpacing: 60,
             hooks: IHooks(address(this))
         });
-        poolManager.initialize(key, SQRTPRICEX96, "");
+        poolManager.initialize(key, SQRTPRICEX96_UPPER, "");
 
         poolManager.unlock(abi.encode(address(token)));
     }
@@ -72,20 +79,36 @@ contract FairLaunchHook is BaseHook {
     function unlockCallback(bytes calldata data) external override poolManagerOnly returns (bytes memory) {
         address token = abi.decode(data, (address));
 
-        Token(token).approve(address(poolManager), INITIAL_LIQUIDITY_AMOUNT);
+        Currency currency = Currency.wrap(address(token));
 
-        Currency currency1 = Currency.wrap(token);
+        PoolKey memory key = PoolKey({
+            currency0: CurrencyLibrary.NATIVE,
+            currency1: currency,
+            fee: 10000,
+            tickSpacing: 60,
+            hooks: IHooks(address(this))
+        });
 
-        // Settle `amountEach` of each currency from the sender
-        // i.e. Create a debit of `amountEach` of each currency with the Pool Manager
-        currency1.settle(
-            poolManager,
-            address(this),
-            INITIAL_LIQUIDITY_AMOUNT,
-            false // `burn` = `false` i.e. we're actually transferring tokens, not burning ERC-6909 Claim Tokens
-        );
+        IPoolManager.ModifyLiquidityParams memory params = IPoolManager.ModifyLiquidityParams({
+            tickLower: START_TICK_LOWER,
+            tickUpper: START_TICK_UPPER,
+            liquidityDelta: SafeCast.toInt256(INITIAL_LIQUIDITY_AMOUNT),
+            salt: bytes32(0)
+        });
+        console.log("before", poolManager.getGit());
+        console.logInt(poolManager.getDelta(currency, address(this)));
+        (BalanceDelta callerDelta, ) = poolManager.modifyLiquidity(key, params, "");
+        console.logInt(BalanceDeltaLibrary.amount0(callerDelta));
+        console.logInt(BalanceDeltaLibrary.amount1(callerDelta));
 
-        currency1.take(poolManager, address(this), INITIAL_LIQUIDITY_AMOUNT, true);
+        console.log("after", poolManager.getGit());
+        console.logInt(poolManager.getDelta(currency, address(this)));
+        CurrencySettler.settle(currency, poolManager, address(this), INITIAL_TOKEN_AMOUNT, false);
+        console.log("after settle", poolManager.getGit());
+        console.logInt(poolManager.getDelta(currency, address(this)));
+        // poolManager.sync(currency);
+        // Token(token).transfer(address(poolManager), INITIAL_LIQUIDITY_AMOUNT);
+        // poolManager.settle(currency);
 
         return "";
     }

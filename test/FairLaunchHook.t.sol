@@ -9,17 +9,24 @@ import {Hooks} from "v4-core/libraries/Hooks.sol";
 
 contract FairLauncherTest is Test, Deployers {
     FairLaunchHook fairLaunchHook;
-    uint160 private constant SQRT_PRICE = 4582 << 96;
-    int24 private constant START_TICK = 168606;
+    uint160 private constant SQRTPRICEX96_LOWER = 362910073449872328385539408603818;
+    uint160 private constant SQRTPRICEX96_UPPER = 364000383803451422962285634103846;
+    int24 private constant START_TICK_LOWER = 168600;
+    int24 private constant START_TICK_UPPER = 168660;
 
     function setUp() public {
         deployFreshManagerAndRouters();
         address hookAddress = address(uint160(Hooks.BEFORE_ADD_LIQUIDITY_FLAG | Hooks.BEFORE_SWAP_FLAG));
         deployCodeTo("FairLaunchHook.sol", abi.encode(manager), hookAddress);
-        fairLaunchHook = FairLaunchHook(fairLaunchHook);
+        fairLaunchHook = FairLaunchHook(hookAddress);
     }
 
     function testStartTick() public {
-        assertEq(TickMath.getTickAtSqrtPrice(SQRT_PRICE), START_TICK);
+        assertEq(TickMath.getTickAtSqrtPrice(SQRTPRICEX96_LOWER), START_TICK_LOWER);
+        assertEq(TickMath.getTickAtSqrtPrice(SQRTPRICEX96_UPPER), START_TICK_UPPER);
+    }
+
+    function testCreateFairLaunch() public {
+        fairLaunchHook.createFairLaunch("FUN", "FUN");
     }
 }
