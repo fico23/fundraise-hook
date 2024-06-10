@@ -2,9 +2,6 @@
 pragma solidity 0.8.25;
 
 import {Token} from "./Token.sol";
-
-import {console} from "forge-std/Test.sol";
-
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 import {CurrencySettler} from "v4-core-test/utils/CurrencySettler.sol";
 import {IHooks} from "v4-core/interfaces/IHooks.sol";
@@ -131,12 +128,12 @@ contract FairLaunchHook is BaseHook {
         return "";
     }
 
-    function beforeAddLiquidity(
-        address,
-        PoolKey calldata,
-        IPoolManager.ModifyLiquidityParams calldata,
-        bytes calldata
-    ) external pure override returns (bytes4) {
+    function beforeAddLiquidity(address, PoolKey calldata, IPoolManager.ModifyLiquidityParams calldata, bytes calldata)
+        external
+        pure
+        override
+        returns (bytes4)
+    {
         revert CantAddLiquidity();
     }
 
