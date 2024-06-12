@@ -116,7 +116,6 @@ contract FairLaunchHook is BaseHook {
             liquidityDelta: SafeCast.toInt256(INITIAL_LIQUIDITY_AMOUNT),
             salt: bytes32(0)
         });
-
         poolManager.modifyLiquidity(key, params, "");
 
         CurrencySettler.settle(currency, poolManager, address(this), INITIAL_TOKEN_AMOUNT, false);
